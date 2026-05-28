@@ -1,9 +1,28 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.venv/
+venv/
+
+# Git
 .git
 .gitignore
+
+# Secrets
 .env
-venv/
-.venv
+*.env
+
+# Large model artefacts — mounted as a volume at runtime
+*.pkl
+flask-ml/model/*.pkl
+
+# Jupyter
+*.ipynb
+.ipynb_checkpoints/
+
+# Editors
+.vscode/
+.idea/
+*.swp

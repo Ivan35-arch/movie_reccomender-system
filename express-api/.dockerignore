@@ -1,0 +1,12 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Secrets
+.env
+*.env
+
+# Editors
+.vscode/
+.idea/
+*.swp

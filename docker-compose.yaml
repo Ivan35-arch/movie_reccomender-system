@@ -1,0 +1,152 @@
+version: "3.9"
+
+# ═══════════════════════════════════════════════════════════════
+#  Seive — Movie Recommender System
+#
+#  Traffic flow:
+#    Browser :8080  →  Nginx (frontend)
+#                   →  /api/*  →  Express API :3000
+#                               →  /api/ml/*  →  Flask ML :5000
+#                   →  DB :5432
+#
+#  Start:  docker compose up --build -d
+#  Logs:   docker compose logs -f
+#  Stop:   docker compose down
+# ═══════════════════════════════════════════════════════════════
+
+services:
+
+  # ──────────────────────────────────────────────────────────
+  # 1. PostgreSQL 15
+  # ──────────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: seive-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       movie_db
+      POSTGRES_USER:     movie_login
+      POSTGRES_PASSWORD: seive_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Schema runs automatically on first boot
+      - ./express-api/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U movie_login -d movie_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - seive-net
+
+  # ──────────────────────────────────────────────────────────
+  # 2. Flask ML API  (collaborative-filtering recommendations)
+  # ──────────────────────────────────────────────────────────
+  flask-ml:
+    build:
+      context: .
+      dockerfile: Dockerfile        # python:3.11-slim + gunicorn
+    container_name: seive-flask-ml
+    restart: unless-stopped
+    environment:
+      FLASK_ENV:    production
+      FLASK_DEBUG:  "0"
+      SECRET_KEY:   change-me-in-production
+      PORT:         "5000"
+      MODEL_PATH:   model/recommender_model.pkl
+      DB_HOST:      db
+      DB_PORT:      "5432"
+      DB_NAME:      movie_db
+      DB_USER:      movie_login
+      DB_PASSWORD:  seive_password
+      DB_SSLMODE:   disable
+    volumes:
+      # Model file mounted at runtime — keeps the image small
+      - ./flask-ml/model:/app/model:ro
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - seive-net
+
+  # ──────────────────────────────────────────────────────────
+  # 3. Express REST API
+  # ──────────────────────────────────────────────────────────
+  express-api:
+    build:
+      context: ./express-api
+      dockerfile: Dockerfile        # node:20-alpine
+    container_name: seive-express-api
+    restart: unless-stopped
+    environment:
+      PORT:            "3000"
+      # PostgreSQL — matches db.js Pool config
+      DB_HOST:         db
+      DB_PORT:         "5432"
+      DB_NAME:         movie_db
+      DB_USER:         movie_login
+      DB_PASSWORD:     seive_password
+      DB_SSLMODE:      disable
+      # JWT
+      JWT_SECRET:      change-me-in-production
+      # CORS — Nginx frontend is on :8080, direct dev on :3000
+      ALLOWED_ORIGINS: "http://localhost:8080,http://localhost:3000"
+      # Internal bridge to Flask ML (Docker service name)
+      FLASK_ML_URL:    http://flask-ml:5000
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      flask-ml:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - seive-net
+
+  # ──────────────────────────────────────────────────────────
+  # 4. Frontend — Nginx static server + reverse proxy
+  #    Browser → :8080 → serves HTML/CSS/JS
+  #                    → /api/* → express-api:3000
+  # ──────────────────────────────────────────────────────────
+  frontend:
+    image: nginx:alpine
+    container_name: seive-frontend
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8080:80"
+    depends_on:
+      express-api:
+        condition: service_healthy
+    networks:
+      - seive-net
+
+# ═══════════════════════════════════════════════════════════════
+# Volumes & Networks
+# ═══════════════════════════════════════════════════════════════
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  seive-net:
+    driver: bridge

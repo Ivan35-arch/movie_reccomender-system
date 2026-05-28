@@ -1,12 +1,16 @@
 /* ═══════════════════════════════════════════════════════════
    SEIVE — MOVIE RECOMMENDER  |  app.js
-   Connects to Flask ML API at http://localhost:5000
+   All API calls go to the Express API which proxies ML calls
+   internally to Flask. The browser only needs one base URL.
 ═══════════════════════════════════════════════════════════ */
 
 'use strict';
 
 // ── Config ─────────────────────────────────────────────────
-const API_BASE = 'http://localhost:5000';
+// When served via Docker/Nginx the browser hits the same host on port 8080;
+// Nginx proxies /api/* to Express :3000.
+// When running locally outside Docker, Express is on :3000 directly.
+const API_BASE = '';
 
 // Emoji fallbacks grouped by decade keywords for visual variety
 const GENRE_EMOJIS = ['🎬', '🎭', '🎥', '🍿', '🎞️', '🌟', '🏆', '🎪'];
@@ -279,7 +283,7 @@ async function fetchKnownUserRecs(userId) {
   dom.feedSection.classList.add('hidden');
 
   try {
-    const data = await apiFetch(`/api/recommend/${userId}?top_n=20`);
+    const data = await apiFetch(`/api/ml/recommend/${userId}?top_n=20`);
     renderCards(data.recommendations, `Picks for User ${userId}`);
   } catch (err) {
     showError(err.message);
@@ -326,7 +330,7 @@ dom.coldRecBtn.addEventListener('click', async () => {
   dom.feedSection.classList.add('hidden');
 
   try {
-    const data = await apiPost('/api/recommend/new-user', { ratings, top_n: 20 });
+    const data = await apiPost('/api/ml/recommend/new-user', { ratings, top_n: 20 });
     renderCards(data.recommendations, 'Your Personalised Picks');
   } catch (err) {
     showError(err.message);
@@ -344,7 +348,7 @@ async function openUsersModal() {
   if (state.allUserIds.length === 0) {
     dom.usersGrid.innerHTML = '<p style="color:var(--gray-2);font-size:.85rem">Loading…</p>';
     try {
-      const data = await apiFetch('/api/users');
+      const data = await apiFetch('/api/ml/users');
       state.allUserIds = data.user_ids;
     } catch {
       dom.usersGrid.innerHTML = '<p style="color:var(--danger);font-size:.85rem">Failed to load users.</p>';
@@ -479,7 +483,7 @@ dom.navMovies.addEventListener('click', async () => {
   dom.feedSection.classList.add('hidden');
 
   try {
-    const data = await apiFetch('/api/movies?per_page=50');
+    const data = await apiFetch('/api/ml/movies?per_page=50');
     // Show as fake cards with zero predicted rating
     const fakeRecs = data.movies.map((title) => ({
       title,
@@ -510,7 +514,7 @@ function setActiveNav(activeEl) {
 // ═══════════════════════════════════════════════════════════
 (async () => {
   try {
-    const health = await apiFetch('/health');
+    const health = await apiFetch('/api/ml/health');
     if (!health.model_loaded) {
       showError(
         '⚠️ API is running but the model file is missing. ' +
