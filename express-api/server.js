@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express    = require('express');
 const cors       = require('cors');
+const path       = require('path');
 
 const authRouter    = require('./routes/auth');
 const moviesRouter  = require('./routes/movies');
@@ -17,6 +18,10 @@ const PORT = process.env.PORT || 3000;
 // ── Middleware ───────────────────────────────────────────
 app.use(cors({ origin: process.env.ALLOWED_ORIGINS || '*' }));
 app.use(express.json());
+
+// ── Serve frontend static files ──────────────────────────
+const FRONTEND = path.join(__dirname, '..', 'frontend');
+app.use(express.static(FRONTEND));
 
 // Request logger
 app.use((req, _res, next) => {
@@ -40,9 +45,12 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'seive-express-api', ts: new Date() });
 });
 
-// ── 404 ──────────────────────────────────────────────────
-app.use((_req, res) => {
-  res.status(404).json({ error: 'Endpoint not found.' });
+// ── SPA fallback — serve index.html for non-API routes ──
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'Endpoint not found.' });
+  }
+  res.sendFile(path.join(FRONTEND, 'index.html'));
 });
 
 // ── Error Handler ─────────────────────────────────────────
