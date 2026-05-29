@@ -1,0 +1,45 @@
+version: '3.9'
+
+services:
+  flask:
+    build:
+      context: ./flask-ml
+      dockerfile: Dockerfile
+    container_name: seive-flask
+    environment:
+      - MODEL_PATH=model/recommender_model.pkl
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - FLASK_DEBUG=0
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+
+  express:
+    build:
+      context: ./express
+      dockerfile: Dockerfile
+    container_name: seive-express
+    environment:
+      - PORT=3000
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - FLASK_URL=http://flask:5000
+      - FRONTEND_URL=http://localhost
+    ports:
+      - "3000:3000"
+    depends_on:
+      - flask
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: seive-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - express
+    restart: unless-stopped

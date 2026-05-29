@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: seive-flask
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    rootDir: flask-ml
+    envVars:
+      - key: MODEL_PATH
+        value: model/recommender_model.pkl
+      - key: TMDB_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FLASK_DEBUG
+        value: "0"

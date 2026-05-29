@@ -12,9 +12,61 @@
 </head>
 <body>
 
-  <!-- ══════════════════════════════════════════════════════
-       TOP NAV
-  ══════════════════════════════════════════════════════ -->
+  <!-- ══ AUTH MODAL ════════════════════════════════════════ -->
+  <div class="auth-overlay" id="auth-overlay">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <svg width="40" height="40" viewBox="0 0 36 36" fill="none">
+          <circle cx="13" cy="13" r="10" stroke="#1AD560" stroke-width="3"/>
+          <circle cx="23" cy="23" r="10" stroke="#ffffff" stroke-width="3"/>
+        </svg>
+        <span>Seive</span>
+      </div>
+      <p class="auth-tagline">AI-powered movie recommendations</p>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="auth-tab-login">Sign In</button>
+        <button class="auth-tab" id="auth-tab-register">Register</button>
+      </div>
+
+      <!-- Login -->
+      <form class="auth-form" id="login-form">
+        <div class="auth-field">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" placeholder="you@example.com" required />
+        </div>
+        <div class="auth-field">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" required />
+        </div>
+        <div class="auth-error hidden" id="login-error"></div>
+        <button type="submit" class="auth-submit" id="login-btn">Sign In</button>
+      </form>
+
+      <!-- Register -->
+      <form class="auth-form hidden" id="register-form">
+        <div class="auth-field">
+          <label for="reg-username">Username</label>
+          <input type="text" id="reg-username" placeholder="moviefan42" required />
+        </div>
+        <div class="auth-field">
+          <label for="reg-email">Email</label>
+          <input type="email" id="reg-email" placeholder="you@example.com" required />
+        </div>
+        <div class="auth-field">
+          <label for="reg-password">Password</label>
+          <input type="password" id="reg-password" placeholder="min 8 characters" required minlength="8" />
+        </div>
+        <div class="auth-error hidden" id="register-error"></div>
+        <button type="submit" class="auth-submit" id="register-btn">Create Account</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ══ TOAST CONTAINER ════════════════════════════════════ -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ══ TOP NAV ════════════════════════════════════════════ -->
   <header class="topbar">
     <button class="icon-btn" id="menu-btn" aria-label="Menu">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -35,16 +87,14 @@
         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
         <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
       </svg>
-      <span class="notif-badge"></span>
+      <span class="notif-badge hidden" id="notif-badge"></span>
     </button>
   </header>
 
-  <!-- ══════════════════════════════════════════════════════
-       MAIN CONTENT
-  ══════════════════════════════════════════════════════ -->
+  <!-- ══ MAIN ═══════════════════════════════════════════════ -->
   <main class="main-content">
 
-    <!-- ── Search Section ───────────────────────────── -->
+    <!-- Search Section -->
     <section class="search-section">
       <h1 class="page-title">Discover Movies</h1>
       <p class="page-subtitle">Get AI-powered picks tailored to your taste</p>
@@ -85,21 +135,30 @@
           Get Recommendations
         </button>
       </div>
+
+      <!-- My Recommendations (logged-in) -->
+      <div class="tab-panel" id="panel-myrecs" style="display:none">
+        <p class="panel-desc">Your personalised picks based on your ratings.</p>
+        <button class="recommend-btn full-width" id="myrecs-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Load My Recommendations
+        </button>
+      </div>
     </section>
 
-    <!-- ── Loader ─────────────────────────────────── -->
+    <!-- Loader -->
     <div class="loader-wrapper hidden" id="loader">
       <div class="loader-ring"></div>
       <p>Finding your next favourite movie…</p>
     </div>
 
-    <!-- ── Error Banner ───────────────────────────── -->
+    <!-- Error Banner -->
     <div class="error-banner hidden" id="error-banner">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
       <span id="error-text">Something went wrong.</span>
     </div>
 
-    <!-- ── Recommendations Feed ───────────────────── -->
+    <!-- Recommendations Feed -->
     <section class="feed-section hidden" id="feed-section">
       <div class="feed-header">
         <h2 class="section-title" id="feed-title">Recommendations</h2>
@@ -108,7 +167,7 @@
       <div class="cards-grid" id="cards-grid"></div>
     </section>
 
-    <!-- ── Users Modal ────────────────────────────── -->
+    <!-- Users Modal -->
     <div class="modal-overlay hidden" id="users-modal">
       <div class="modal-card">
         <div class="modal-header">
@@ -120,7 +179,7 @@
       </div>
     </div>
 
-    <!-- ── Movie Detail Drawer ─────────────────────── -->
+    <!-- Movie Detail Drawer -->
     <div class="drawer-overlay hidden" id="drawer-overlay">
       <aside class="detail-drawer" id="detail-drawer">
         <button class="drawer-close" id="drawer-close">
@@ -132,9 +191,7 @@
 
   </main>
 
-  <!-- ══════════════════════════════════════════════════════
-       BOTTOM NAV
-  ══════════════════════════════════════════════════════ -->
+  <!-- ══ BOTTOM NAV ══════════════════════════════════════════ -->
   <nav class="bottom-nav" aria-label="Primary navigation">
     <button class="nav-item active" id="nav-home" aria-label="Home">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
