@@ -93,7 +93,23 @@ def get_db_connection():
         )
         return conn
     """
-    raise NotImplementedError("Database connection not configured yet.")
+    # Prefer a single `DATABASE_URL` (heroku/Postgres-style) if provided.
+    import psycopg2
+
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        # psycopg2 accepts the URL directly; ensure SSL mode is set when required
+        return psycopg2.connect(database_url, sslmode=os.getenv("DB_SSLMODE", "require"))
+
+    # Fallback to individual DB_* environment variables
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST"),
+        port=int(os.getenv("DB_PORT", 5432)),
+        dbname=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        sslmode=os.getenv("DB_SSLMODE", "require"),
+    )
 
 
 # ---------------------------------------------------------------------------
