@@ -1,4 +1,5 @@
-const API_BASE = ''; // set to your Express/Vercel base URL if needed
+// Flask API base URL — update for production deployment
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 async function fetchMovies(q = '', page=1, per_page=20){
   try{
@@ -50,33 +51,34 @@ async function onRate(movie, value, cardEl){
   const stars = cardEl.querySelectorAll('.star');
   stars.forEach(s => s.classList.toggle('active', +s.dataset.value <= value));
 
-  // send rating to Express API (adjust endpoint as needed)
+  // send rating to Flask API
+  const user_id = 1; // placeholder; in production, use authenticated user_id
   try{
     await fetch(API_BASE + '/api/ratings', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ movie_id: movie.movielens_id || movie.id, rating: value })
+      body: JSON.stringify({ user_id, movie_id: movie.id || movie.movielens_id, rating: value })
     });
 
     // trigger recompute on Flask
-    await fetch(API_BASE + `/api/recompute/${movie.user_id || 1}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ top_n:5 }) });
+    await fetch(API_BASE + `/api/recompute/${user_id}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ top_n:5 }) });
 
-    // update recommendations panel (naive refresh)
+    // update recommendations panel
     showEvent('Rated: ' + movie.title + ' → ' + value);
-    await fetchRecommendations();
+    await fetchRecommendations(user_id);
   }catch(err){
     console.warn('rating failed', err);
     showEvent('Rating failed (network)');
   }
 }
 
-async function fetchRecommendations(){
+async function fetchRecommendations(user_id = 1){
   try{
-    const res = await fetch(API_BASE + '/api/recommendations/latest');
+    const res = await fetch(API_BASE + `/api/recommend/${user_id}?top_n=10`);
     if(!res.ok) return;
     const data = await res.json();
     const list = document.getElementById('recommendations');
     list.innerHTML = '';
-    (data.payload || []).slice(0,8).forEach(r =>{
+    (data.recommendations || []).slice(0,8).forEach(r =>{
       const li = document.createElement('li'); li.className='rec-item';
       const img = document.createElement('img'); img.src = r.poster_url || 'https://via.placeholder.com/80x120';
       const div = document.createElement('div'); div.innerHTML = `<strong>${r.title}</strong><div class="muted small">pred ${r.predicted_rating}</div>`;
@@ -90,12 +92,12 @@ function showEvent(msg){
   const p = document.createElement('div'); p.textContent = `${new Date().toLocaleTimeString()} — ${msg}`; events.prepend(p);
 }
 
-function initSSE(){
+function initSSE(user_id = 1){
   if(typeof(EventSource)==='undefined') return showEvent('SSE not supported');
-  const sse = new EventSource('/sse/notifications');
+  const sse = new EventSource(`${API_BASE}/sse/notifications?user_id=${user_id}`);
   const status = document.getElementById('sse-status');
   sse.onopen = ()=>{ status.textContent='connected'; showEvent('SSE connected') };
-  sse.onmessage = e=>{ showEvent('Notification: '+e.data); fetchRecommendations(); }
+  sse.onmessage = e=>{ showEvent('Notification: '+e.data); fetchRecommendations(user_id); }
   sse.onerror = ()=>{ status.textContent='disconnected'; showEvent('SSE error') }
 }
 

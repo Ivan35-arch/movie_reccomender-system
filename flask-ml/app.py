@@ -549,6 +549,116 @@ def recompute_and_cache(user_id: int):
             pass
 
 
+# ── Ratings & Notifications ────────────────────────────────────────────────
+
+@app.route("/api/ratings", methods=["POST"])
+def submit_rating():
+    """Write a movie rating to the database and trigger notification.
+    
+    Request body (JSON)
+    -------------------
+    {
+        "user_id": 1,
+        "movie_id": 123,
+        "rating": 4.5
+    }
+    """
+    body = request.get_json(silent=True)
+    if not body or "user_id" not in body or "movie_id" not in body or "rating" not in body:
+        return jsonify({"error": "user_id, movie_id, and rating are required"}), 400
+    
+    user_id = int(body["user_id"])
+    movie_id = int(body["movie_id"])
+    rating = float(body["rating"])
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Insert or update rating
+        cur.execute(
+            "INSERT INTO ratings (user_id, movie_id, rating) VALUES (%s, %s, %s) ON CONFLICT (user_id, movie_id) DO UPDATE SET rating = EXCLUDED.rating, created_at = NOW()",
+            (user_id, movie_id, rating),
+        )
+        
+        # Create notification event
+        notification_payload = {"type": "rating", "user_id": user_id, "movie_id": movie_id, "rating": rating}
+        cur.execute(
+            "INSERT INTO notifications (user_id, type, payload) VALUES (%s, %s, %s)",
+            (user_id, "rating", psycopg2.extras.Json(notification_payload)),
+        )
+        
+        conn.commit()
+        logger.info(f"Rating saved: user {user_id}, movie {movie_id}, rating {rating}")
+        return jsonify({"ok": True, "user_id": user_id, "movie_id": movie_id}), 201
+    except Exception as e:
+        logger.exception(f"Failed to save rating: {e}")
+        return jsonify({"error": "Failed to save rating"}), 500
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+@app.route("/sse/notifications", methods=["GET"])
+def sse_notifications():
+    """Server-Sent Events endpoint for real-time notifications.
+    
+    Query params
+    -----------
+    user_id  (optional, int) — filter notifications by user
+    """
+    user_id = request.args.get("user_id", None)
+    if user_id is not None:
+        user_id = int(user_id)
+    
+    def event_stream():
+        lastId = 0
+        try:
+            conn = get_db_connection()
+        except Exception as e:
+            logger.exception(f"SSE DB connection failed: {e}")
+            yield f"data: {json.dumps({'error': 'DB connection failed'})}\n\n"
+            return
+        
+        try:
+            import time
+            while True:
+                cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                
+                if user_id:
+                    query = "SELECT id, user_id, type, payload FROM notifications WHERE id > %s AND user_id = %s ORDER BY id ASC LIMIT 50"
+                    cur.execute(query, (lastId, user_id))
+                else:
+                    query = "SELECT id, user_id, type, payload FROM notifications WHERE id > %s ORDER BY id ASC LIMIT 50"
+                    cur.execute(query, (lastId,))
+                
+                rows = cur.fetchall()
+                
+                for row in rows:
+                    data = dict(row)
+                    lastId = data["id"]
+                    cur.execute("UPDATE notifications SET delivered = TRUE WHERE id = %s", (lastId,))
+                    yield f"data: {json.dumps(data)}\n\n"
+                
+                conn.commit()
+                time.sleep(2)
+        except Exception as e:
+            logger.exception(f"SSE error: {e}")
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+    
+    return event_stream(), 200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+    }
+
+
 # ---------------------------------------------------------------------------
 # Error handlers
 # ---------------------------------------------------------------------------
