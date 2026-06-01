@@ -1,5 +1,5 @@
 // Flask API base URL — update for production deployment
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE = window.API_BASE || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000' : 'https://seive-flask.onrender.com');
 
 async function fetchMovies(q = '', page=1, per_page=20){
   try{

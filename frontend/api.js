@@ -1,7 +1,7 @@
 // Frontend API wrapper for Flask backend
 // Exposes helper functions under window.Api
 
-const API_BASE = window.API_BASE || (window.__API_BASE__ = (window.location.hostname === 'localhost' ? 'http://localhost:5000' : ''));
+const API_BASE = window.API_BASE || (window.__API_BASE__ = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000' : 'https://seive-flask.onrender.com'));
 
 async function _request(path, opts = {}){
   const url = API_BASE + path;
@@ -45,4 +45,4 @@ const Api = {
 // Expose globally
 window.Api = Api;
 
-export default Api;
+
