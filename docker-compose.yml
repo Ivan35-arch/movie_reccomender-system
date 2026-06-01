@@ -1,0 +1,38 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-movie_recs}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  flask:
+    build: ./flask-ml
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - MODEL_PATH=${MODEL_PATH}
+      - TMDB_API_KEY=${TMDB_API_KEY}
+    depends_on:
+      - postgres
+    ports:
+      - "5000:5000"
+
+  express:
+    build: ./express-api
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - FLASK_URL=http://flask:5000
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      - flask
+      - postgres
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:

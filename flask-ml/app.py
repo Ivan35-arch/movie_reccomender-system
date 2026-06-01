@@ -27,6 +27,9 @@ from functools import wraps
 
 import numpy as np
 import joblib
+import json
+import requests
+import psycopg2.extras
 from flask import Flask, jsonify, request, abort
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -210,6 +213,73 @@ def cold_start_recommendations(user_ratings: dict, user_similarity: np.ndarray,
         {"title": title, "predicted_rating": round(float(score), 4)}
         for title, score in top_movies.items()
     ]
+
+
+def _enrich_movie_by_title(conn, title: str, tmdb_api_key: str | None = None) -> dict:
+    """Try to find the movie in the `movies` table by title; if missing and
+    TMDb API key is available, query TMDb and insert the movie record.
+
+    Returns a dict with at least `title` and optional `tmdb_id`, `poster_url`,
+    `overview`, `tmdb_rating`, and `tmdb_data`.
+    """
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    # Try exact match first
+    cur.execute("SELECT * FROM movies WHERE lower(title)=lower(%s) LIMIT 1", (title,))
+    row = cur.fetchone()
+    if row:
+        return dict(row)
+
+    # Fallback: partial match
+    cur.execute("SELECT * FROM movies WHERE title ILIKE %s LIMIT 1", (f"%{title}%",))
+    row = cur.fetchone()
+    if row:
+        return dict(row)
+
+    # If not found, optionally call TMDb search API
+    if not tmdb_api_key:
+        return {"title": title}
+
+    try:
+        params = {"api_key": tmdb_api_key, "query": title}
+        r = requests.get("https://api.themoviedb.org/3/search/movie", params=params, timeout=5)
+        r.raise_for_status()
+        data = r.json()
+        results = data.get("results") or []
+        if not results:
+            return {"title": title}
+
+        m = results[0]
+        tmdb_id = m.get("id")
+        poster_path = m.get("poster_path")
+        poster_url = f"https://image.tmdb.org/t/p/w342{poster_path}" if poster_path else None
+
+        # Insert into movies table (id = tmdb_id)
+        cur.execute(
+            "INSERT INTO movies (id, title, poster_url, overview, release_year, tmdb_rating, tmdb_data) VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (id) DO NOTHING",
+            (
+                tmdb_id,
+                m.get("title"),
+                poster_url,
+                m.get("overview"),
+                int(m.get("release_date", "0000-00-00")[:4]) if m.get("release_date") else None,
+                float(m.get("vote_average")) if m.get("vote_average") is not None else None,
+                json.dumps(m),
+            ),
+        )
+        conn.commit()
+
+        # Return enriched dict
+        return {
+            "title": m.get("title"),
+            "tmdb_id": tmdb_id,
+            "poster_url": poster_url,
+            "overview": m.get("overview"),
+            "tmdb_rating": m.get("vote_average"),
+            "tmdb_data": m,
+        }
+    except Exception:
+        conn.rollback()
+        return {"title": title}
 
 
 # ---------------------------------------------------------------------------
@@ -409,6 +479,74 @@ def similar_users(user_id: int):
         "top_n": top_n,
         "similar_users": result,
     }), 200
+
+
+@app.route("/api/recompute/<int:user_id>", methods=["POST"])
+@_require_model
+def recompute_and_cache(user_id: int):
+    """Trigger recomputation of recommendations for *user_id*, enrich with
+    TMDb data when available, cache into `recommendations` table, and return
+    the generated payload.
+    """
+    model = get_model()
+    user_item_matrix = model["user_item_matrix"]
+    user_similarity = model["user_similarity"]
+
+    if user_id not in user_item_matrix.index:
+        return jsonify({"error": f"User {user_id} not found."}), 404
+
+    body = request.get_json(silent=True) or {}
+    top_n = int(body.get("top_n", 10))
+    top_n = max(1, min(top_n, 50))
+
+    recommendations = generate_recommendations(
+        user_id, user_similarity, user_item_matrix, top_n=top_n
+    )
+
+    # Try to cache into DB and enrich using movies table / TMDb if available
+    tmdb_api_key = os.getenv("TMDB_API_KEY")
+    payload = []
+    try:
+        conn = get_db_connection()
+    except Exception as exc:
+        # DB not available — return recommendations without caching
+        logger.exception("DB connection failed while caching recommendations")
+        return jsonify({"user_id": user_id, "recommendations": recommendations, "cached": False}), 200
+
+    try:
+        cur = conn.cursor()
+        for rec in recommendations:
+            title = rec.get("title")
+            enriched = _enrich_movie_by_title(conn, title, tmdb_api_key)
+            rec_record = {**rec, **enriched}
+            payload.append(rec_record)
+
+        # Insert into recommendations table
+        cur.execute(
+            "INSERT INTO recommendations (user_id, payload) VALUES (%s, %s) RETURNING id, generated_at",
+            (user_id, psycopg2.extras.Json(payload)),
+        )
+        row = cur.fetchone()
+        conn.commit()
+
+        resp = {
+            "user_id": user_id,
+            "top_n": top_n,
+            "cached": True,
+            "recommendation_id": row[0] if row else None,
+            "generated_at": row[1].isoformat() if row and row[1] else None,
+            "recommendations": payload,
+        }
+        return jsonify(resp), 200
+    except Exception:
+        conn.rollback()
+        logger.exception("Failed to cache recommendations")
+        return jsonify({"user_id": user_id, "recommendations": recommendations, "cached": False}), 200
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
