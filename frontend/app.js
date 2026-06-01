@@ -3,6 +3,15 @@ const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 async function fetchMovies(q = '', page=1, per_page=20){
   try{
+    if(window.Api){
+      if(q){
+        const data = await window.Api.searchMovie(q);
+        return data.results || [];
+      }
+      const data = await window.Api.listMovies(page, per_page);
+      return data.movies || [];
+    }
+
     const url = q ? `/api/movie/${encodeURIComponent(q)}` : `/api/movies?page=${page}&per_page=${per_page}`;
     const res = await fetch(API_BASE + url);
     if(!res.ok) throw new Error('Failed to fetch');
@@ -54,13 +63,16 @@ async function onRate(movie, value, cardEl){
   // send rating to Flask API
   const user_id = 1; // placeholder; in production, use authenticated user_id
   try{
-    await fetch(API_BASE + '/api/ratings', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ user_id, movie_id: movie.id || movie.movielens_id, rating: value })
-    });
-
-    // trigger recompute on Flask
-    await fetch(API_BASE + `/api/recompute/${user_id}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ top_n:5 }) });
+    if(window.Api){
+      await window.Api.postRating(user_id, movie.id || movie.movielens_id, value);
+      await window.Api.recompute(user_id, 5);
+    }else{
+      await fetch(API_BASE + '/api/ratings', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ user_id, movie_id: movie.id || movie.movielens_id, rating: value })
+      });
+      await fetch(API_BASE + `/api/recompute/${user_id}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ top_n:5 }) });
+    }
 
     // update recommendations panel
     showEvent('Rated: ' + movie.title + ' → ' + value);
@@ -73,9 +85,15 @@ async function onRate(movie, value, cardEl){
 
 async function fetchRecommendations(user_id = 1){
   try{
-    const res = await fetch(API_BASE + `/api/recommend/${user_id}?top_n=10`);
-    if(!res.ok) return;
-    const data = await res.json();
+    let data;
+    if(window.Api){
+      data = await window.Api.recommendForUser(user_id, 10, true);
+    }else{
+      const res = await fetch(API_BASE + `/api/recommend/${user_id}?top_n=10`);
+      if(!res.ok) return;
+      data = await res.json();
+    }
+
     const list = document.getElementById('recommendations');
     list.innerHTML = '';
     (data.recommendations || []).slice(0,8).forEach(r =>{
@@ -94,6 +112,15 @@ function showEvent(msg){
 
 function initSSE(user_id = 1){
   if(typeof(EventSource)==='undefined') return showEvent('SSE not supported');
+  if(window.Api && window.Api.initSSE){
+    window.Api.initSSE(user_id,
+      e=>{ showEvent('Notification: '+e.data); fetchRecommendations(user_id); },
+      ()=>{ document.getElementById('sse-status').textContent='connected'; showEvent('SSE connected') },
+      ()=>{ document.getElementById('sse-status').textContent='disconnected'; showEvent('SSE error') }
+    );
+    return;
+  }
+
   const sse = new EventSource(`${API_BASE}/sse/notifications?user_id=${user_id}`);
   const status = document.getElementById('sse-status');
   sse.onopen = ()=>{ status.textContent='connected'; showEvent('SSE connected') };

@@ -1,0 +1,122 @@
+openapi: 3.0.0
+info:
+  title: Seive Movie Recommender API
+  version: 1.0.0
+  description: OpenAPI spec for the Flask ML backend
+servers:
+  - url: http://localhost:5000
+paths:
+  /health:
+    get:
+      summary: Liveness probe
+      responses:
+        '200':
+          description: OK
+  /api/users:
+    get:
+      summary: List known user IDs
+      responses:
+        '200':
+          description: A list of user IDs
+          content:
+            application/json:
+              schema:
+                type: object
+  /api/movies:
+    get:
+      summary: List movies (paginated)
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paginated list of movie titles
+  /api/movie/{title}:
+    get:
+      summary: Search movies by title
+      parameters:
+        - in: path
+          name: title
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Search results
+  /api/recommend/{user_id}:
+    get:
+      summary: Recommendations for a known user
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: top_n
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Recommendations payload
+  /api/recommend/new-user:
+    post:
+      summary: Cold-start recommendations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Recommendations for new user
+  /api/recompute/{user_id}:
+    post:
+      summary: Recompute and cache recommendations for user
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Cached recommendations result
+  /api/ratings:
+    post:
+      summary: Submit a rating
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: integer
+                movie_id:
+                  type: integer
+                rating:
+                  type: number
+      responses:
+        '201':
+          description: Rating accepted
+  /sse/notifications:
+    get:
+      summary: Server-Sent Events stream for notifications
+      parameters:
+        - in: query
+          name: user_id
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: SSE stream
+components: {}

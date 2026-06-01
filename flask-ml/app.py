@@ -31,6 +31,7 @@ import json
 import requests
 import psycopg2.extras
 from flask import Flask, jsonify, request, abort
+from flask import send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -295,6 +296,39 @@ def health():
         "model_loaded": model_ok,
         "model_path": MODEL_PATH,
     }), 200
+
+
+# Serve OpenAPI spec and simple Swagger UI
+@app.route('/openapi.yaml', methods=['GET'])
+def openapi_yaml():
+        try:
+                return send_from_directory(os.path.dirname(__file__), 'openapi.yaml')
+        except Exception:
+                return jsonify({'error': 'OpenAPI file not found.'}), 404
+
+
+@app.route('/docs', methods=['GET'])
+def swagger_ui():
+        # Minimal Swagger UI page using CDN
+        html = '''
+        <!doctype html>
+        <html>
+            <head>
+                <title>API Docs</title>
+                <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@4.18.2/swagger-ui.css" />
+            </head>
+            <body>
+                <div id="swagger-ui"></div>
+                <script src="https://unpkg.com/swagger-ui-dist@4.18.2/swagger-ui-bundle.js"></script>
+                <script>
+                    window.onload = function(){
+                        const ui = SwaggerUIBundle({ url: '/openapi.yaml', dom_id: '#swagger-ui' });
+                    };
+                </script>
+            </body>
+        </html>
+        '''
+        return html, 200
 
 
 # ── Users ──────────────────────────────────────────────────────────────────

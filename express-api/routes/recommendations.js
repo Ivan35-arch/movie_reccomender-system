@@ -1,7 +1,6 @@
 import express from 'express';
 import pkg from 'pg';
 const { Pool } = pkg;
-import fetch from 'node-fetch';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -19,7 +18,8 @@ router.post('/ratings', async (req, res)=>{
     // Call Flask recompute endpoint to regenerate recommendations
     const flask = process.env.FLASK_URL || 'http://flask:5000';
     try{
-      await fetch(`${flask}/api/recompute/${user_id}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ top_n: 10 }) });
+      // Use global fetch available in Node 18+
+      await global.fetch(`${flask}/api/recompute/${user_id}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ top_n: 10 }) });
     }catch(e){ console.warn('Flask recompute failed', e); }
 
     // create notification for SSE
