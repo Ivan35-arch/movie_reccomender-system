@@ -1,0 +1,2 @@
+# Place recommender_model.pkl here after running the notebook.
+# The app expects: flask-ml/model/recommender_model.pkl

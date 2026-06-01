@@ -1,0 +1,30 @@
+# Render service manifest for the Flask ML + API service (full Python stack)
+# Usage: connect repo in Render, Render will read this manifest on deploy
+
+services:
+  - type: web
+    name: seive-flask
+    env: python
+    region: oregon
+    plan: free
+    rootDir: flask-ml
+    buildCommand: pip install -r requirements.txt && python -m gunicorn app:app --bind 0.0.0.0:$PORT
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        value: ""
+        hidden: true
+      - key: MODEL_PATH
+        value: "/opt/render/project/src/flask-ml/model/movie_recommender_model.joblib"
+        hidden: false
+      - key: TMDB_API_KEY
+        value: ""
+        hidden: true
+      - key: SECRET_KEY
+        value: ""
+        hidden: true
+      - key: JWT_SECRET
+        value: ""
+        hidden: true
