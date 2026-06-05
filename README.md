@@ -65,7 +65,7 @@ Copy credentials into `.env.local` (already created):
 cat .env.local
 # Should contain:
 # DATABASE_URL=postgresql://movie_login:@hazardkid10@movie-recommender.postgres.database.azure.com:5432/movie_db
-# MODEL_PATH=C:/Users/USER/Desktop/movie_reccomender-system/movie_recommender_model.pkl
+# MODEL_PATH=C:/Users/USER/Desktop/movie_reccomender-system/movie_recommender_model.joblib
 # etc.
 ```
 

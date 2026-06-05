@@ -3,7 +3,7 @@ Movie Recommender System — Flask ML API
 ---------------------------------------
 Built from model.ipynb (User-based Collaborative Filtering, MovieLens Small).
 
-Saved model structure (model/recommender_model.pkl):
+Saved model structure (model/movie_recommender_model.joblib):
   {
     'user_similarity'  : np.ndarray  (610 x 610 cosine-similarity matrix),
     'user_item_matrix' : pd.DataFrame (610 users x 9719 movies, ratings pivot)
@@ -54,7 +54,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 # ---------------------------------------------------------------------------
 # Model loading
 # ---------------------------------------------------------------------------
-MODEL_PATH = os.getenv("MODEL_PATH", "model/recommender_model.pkl")
+MODEL_PATH = os.getenv("MODEL_PATH", "model/movie_recommender_model.joblib")
 _model_data: dict | None = None
 
 
@@ -65,7 +65,7 @@ def get_model() -> dict:
         if not os.path.exists(MODEL_PATH):
             raise FileNotFoundError(
                 f"Model file not found at '{MODEL_PATH}'. "
-                "Run the notebook to generate 'recommender_model.pkl' first, "
+                "Run the notebook to generate 'movie_recommender_model.joblib' first, "
                 "then place it in flask-ml/model/."
             )
         logger.info("Loading model from %s …", MODEL_PATH)
